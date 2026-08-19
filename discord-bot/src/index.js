@@ -3,7 +3,7 @@ import { Client, GatewayIntentBits, Partials, Events } from 'discord.js';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { askClaude, SERVERS } from './claude.js';
+import { askClaude, BACKEND } from './claude.js';
 import { scheduleDigest } from './digest.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,7 +68,7 @@ client.on(Events.MessageCreate, async (message) => {
         'tools — use whichever fit the question. Format with Discord markdown (bold, bullet ' +
         'points) — never headers (#). Be direct; skip preamble.',
       prompt: question,
-      servers: await SERVERS.both(),
+      backend: BACKEND.both,
       maxTokens: 1500,
     });
     await message.reply(text.slice(0, 1900));

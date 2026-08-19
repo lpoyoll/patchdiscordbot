@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { askClaude, SERVERS } from '../claude.js';
+import { askClaude, BACKEND } from '../claude.js';
 
 export const data = new SlashCommandBuilder()
   .setName('pipeline')
@@ -29,7 +29,7 @@ export async function execute(interaction) {
         'You are a terse ops assistant posting into a Discord channel. Use the Patch MCP tools ' +
         'to answer. Format with Discord markdown (bold, bullet points) — never headers (#).',
       prompt,
-      servers: await SERVERS.patch(),
+      backend: BACKEND.patch,
     });
     await interaction.editReply(text.slice(0, 1900));
   } catch (err) {

@@ -117,6 +117,32 @@ email, etc.). If Patch's row-level security is scoped in a way the bot
 account can't see what you need, you may need to grant that account
 additional permissions/role inside Patch itself.
 
+#### Why Patch doesn't use Anthropic's managed MCP connector
+
+Madgicx (`SERVERS`/`mcp_servers` in earlier versions of this code) uses
+Anthropic's built-in MCP connector — you hand it a URL + bearer token and
+Anthropic talks to the server for you. Patch can't use that path: Anthropic's
+connector does its own OAuth discovery against the server's declared
+authorization-server metadata, and Supabase's OAuth server for this project
+only advertises `authorization_code` + `refresh_token` grants — not
+`password` or `client_credentials`. Anthropic's connector won't trust a
+bearer token that wasn't minted via a grant type the authorization server
+itself lists, even though Patch's own MCP resource server (correctly, with
+`requireOAuthClientClaim: false`) accepts that token fine when called
+directly — confirmed by hand with a raw `fetch` from inside the running
+container.
+
+So instead, `src/patch-mcp-client.js` talks to `https://claimyourpatch.com/mcp`
+directly — the same bearer-token approach `docs/mcp-script-access.md` in the
+Patch repo documents — and `src/claude.js` runs a manual tool-use loop: it
+hands Patch's tool list to Claude as ordinary client-side `tools`, executes
+whichever ones Claude calls by hitting Patch's MCP endpoint itself, and
+feeds the results back until Claude has a final answer. Madgicx still goes
+through the managed connector unchanged, since its OAuth server does support
+`client_credentials`. The `backend` option on `askClaude()` (`'patch'` /
+`'madgicx'` / `'both'`) controls which path a given command uses — see
+`BACKEND` in `src/claude.js`.
+
 ## 4. Install & configure
 
 ```bash

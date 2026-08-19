@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { askClaude, SERVERS } from '../claude.js';
+import { askClaude, BACKEND } from '../claude.js';
 
 export const data = new SlashCommandBuilder()
   .setName('ask')
@@ -20,7 +20,7 @@ export async function execute(interaction) {
         'MCP tools — use whichever fit the question, or both. Format with Discord markdown ' +
         '(bold, bullet points) — never headers (#). Be direct; skip preamble.',
       prompt: question,
-      servers: await SERVERS.both(),
+      backend: BACKEND.both,
       maxTokens: 1500,
     });
     await interaction.editReply(text.slice(0, 1900));

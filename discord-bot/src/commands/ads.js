@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { askClaude, SERVERS } from '../claude.js';
+import { askClaude, BACKEND } from '../claude.js';
 
 export const data = new SlashCommandBuilder()
   .setName('ads')
@@ -32,7 +32,7 @@ export async function execute(interaction) {
         'over/under-pacing. Format with Discord markdown (bold, bullet points) — never headers (#). ' +
         'If a figure is unavailable from the tools, say so rather than estimating it.',
       prompt: `Pull ad performance ${scope} for ${window} and present it compactly.`,
-      servers: await SERVERS.madgicx(),
+      backend: BACKEND.madgicx,
     });
     await interaction.editReply(text.slice(0, 1900));
   } catch (err) {

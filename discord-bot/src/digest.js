@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { askClaude, SERVERS } from './claude.js';
+import { askClaude, BACKEND } from './claude.js';
 
 /**
  * Registers a scheduled job that posts a pipeline + ad performance digest
@@ -29,7 +29,7 @@ export function scheduleDigest(client) {
         prompt:
           'Pull pipeline_summary and a quick ad performance check across connected accounts ' +
           '(last 24-48h), then write the digest.',
-        servers: await SERVERS.both(),
+        backend: BACKEND.both,
         maxTokens: 1000,
       });
 
