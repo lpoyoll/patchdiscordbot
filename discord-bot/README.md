@@ -125,27 +125,29 @@ cp .env.example .env
 # fill in .env with the values from steps 1-3
 ```
 
-## 5. Register the slash commands
-
-```bash
-npm run register-commands
-```
-
-Re-run this any time you add/change a command file.
-
-## 6. Run it
+## 5. Run it
 
 ```bash
 npm start
 ```
+
+`npm start` registers/re-registers the slash commands, then starts the bot —
+so you never need a separate manual step, on Railway or anywhere else. This
+is safe to run on every deploy/restart: re-registering identical commands is
+a no-op as far as Discord is concerned.
+
+If you just want to (re-)register commands without starting the bot process
+(e.g. testing locally), run `npm run register-commands` on its own.
 
 ## Deploying (so it stays online)
 
 Pick one:
 - **Railway / Render / Fly.io** — connect the repo, set the `.env` values as
   environment variables in their dashboard, deploy. Easiest option, free
-  tiers exist.
-- **A small VPS** — clone the repo, `npm install`, run with `pm2 start src/index.js`
+  tiers exist. Since `npm start` handles command registration itself, there's
+  nothing extra to run there — just make sure the service's start command is
+  `npm start` (the default from this repo's `package.json`).
+- **A small VPS** — clone the repo, `npm install`, run with `pm2 start npm -- start`
   or a systemd service so it restarts on crash/reboot.
 - **Your own machine** — works, but the bot goes offline whenever the
   machine sleeps or the terminal closes.
