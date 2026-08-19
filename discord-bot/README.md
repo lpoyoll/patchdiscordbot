@@ -2,16 +2,18 @@
 
 ## Status
 
-`.env` in this zip is pre-filled with your Madgicx credentials. Everything
+`.env` in this zip has your Madgicx `MADGICX_CLIENT_ID` pre-filled. Everything
 else is still blank — these can only come from your own accounts, so I can't
 fill them in for you:
 
 - [ ] `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` — Discord Developer Portal (step 1)
 - [ ] `ANTHROPIC_API_KEY` — Anthropic Console (step 2)
 - [ ] `PATCH_MCP_TOKEN` — Patch's own settings (step 3)
-- [x] `MADGICX_MCP_TOKEN` / `MADGICX_CLIENT_ID` — already in `.env`
+- [ ] `MADGICX_CLIENT_SECRET` — Madgicx dashboard → Workspace Settings → MCP
+  Integration, next to the Client ID (see step 3a)
+- [x] `MADGICX_CLIENT_ID` — already in `.env`
 
-Once those three are filled in, run steps 4-6 below and it's live.
+Once those four are filled in, run steps 4-6 below and it's live.
 
 
 A Discord bot that answers questions and posts digests by calling Claude with
@@ -57,30 +59,36 @@ claude.ai login.
 
 ## 3. MCP server tokens — the part that needs your input
 
-Both Patch and Madgicx expose their MCP servers behind OAuth (I confirmed
-this for Patch — `claimyourpatch.com/mcp` returns a 401 with an OAuth
-challenge if you hit it unauthenticated). OAuth is normally an interactive,
-browser-based flow, which doesn't fit a headless bot process cleanly. You've
-got two realistic options and I don't know which Patch/Madgicx support
-without you checking:
+### 3a. Madgicx — Client ID / Client Secret (already wired up)
 
-**Option A — long-lived token, if either service offers one.** Check Patch's
-own admin/integrations settings and Madgicx's developer/API settings for a
-"personal access token" or "service account token" you can generate once and
-drop straight into `PATCH_MCP_TOKEN` / `MADGICX_MCP_TOKEN` in `.env`. This is
-the clean option if it exists.
+Madgicx's MCP servers support a client-credentials flow for non-interactive
+clients like this bot (see their "Other MCP Clients → Option 2" docs).
+`src/madgicx-auth.js` implements it:
 
-**Option B — reuse a session token.** Some MCP servers issue a token once you
-complete the OAuth flow through an existing client (e.g. connecting it in
-claude.ai) that you can then copy out and reuse, though these are often
-short-lived and meant to be refreshed, not hardcoded. If this is the only
-route, you'll want to add token-refresh handling before relying on it — the
-code here assumes a token that's just valid, and won't refresh one for you.
+1. Go to your Madgicx dashboard → **Workspace Settings → MCP Integration**
+   and copy the **Client ID** and **Client Secret** (the same pair authorizes
+   both the Facebook Ads and Google Ads MCP servers).
+2. Put them in `.env` as `MADGICX_CLIENT_ID` and `MADGICX_CLIENT_SECRET`.
+3. That's it — on each request, `madgicx-auth.js` exchanges those for a
+   short-lived access token via `POST https://app.madgicx.com/o/token/`
+   (`grant_type=client_credentials`), caches it, and transparently fetches a
+   new one shortly before it expires. No manual token copying needed.
 
-Either way, the code is already wired for it — `src/claude.js` reads
-`PATCH_MCP_TOKEN` / `MADGICX_MCP_TOKEN` from the environment and sends them
-as the bearer token for each MCP server. You just need to get a real value
-into `.env`.
+If you'd rather skip client-credentials entirely and paste in a token you
+already have some other way, set `MADGICX_MCP_TOKEN` instead and leave the
+client ID/secret blank — the code falls back to using that directly as the
+bearer token, but then *you're* responsible for refreshing it before it
+expires.
+
+### 3b. Patch — long-lived token
+
+Patch's MCP server (`claimyourpatch.com/mcp`) is also behind OAuth (confirmed
+— it returns a 401 with an OAuth challenge when hit unauthenticated). Check
+Patch's own admin/integrations settings for a "personal access token" or
+"service account token" you can generate once and drop into `PATCH_MCP_TOKEN`
+in `.env`. If Patch only offers an interactive session token that expires,
+let me know and I'll add refresh handling for it the same way as Madgicx —
+just tell me the token endpoint and grant type Patch uses.
 
 ## 4. Install & configure
 

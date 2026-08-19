@@ -20,7 +20,7 @@ export async function execute(interaction) {
         'MCP tools — use whichever fit the question, or both. Format with Discord markdown ' +
         '(bold, bullet points) — never headers (#). Be direct; skip preamble.',
       prompt: question,
-      servers: SERVERS.both,
+      servers: await SERVERS.both(),
       maxTokens: 1500,
     });
     await interaction.editReply(text.slice(0, 1900));

@@ -29,7 +29,7 @@ export async function execute(interaction) {
         'You are a terse ops assistant posting into a Discord channel. Use the Patch MCP tools ' +
         'to answer. Format with Discord markdown (bold, bullet points) — never headers (#).',
       prompt,
-      servers: SERVERS.patch,
+      servers: await SERVERS.patch(),
     });
     await interaction.editReply(text.slice(0, 1900));
   } catch (err) {

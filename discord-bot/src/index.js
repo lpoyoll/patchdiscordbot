@@ -68,7 +68,7 @@ client.on(Events.MessageCreate, async (message) => {
         'tools — use whichever fit the question. Format with Discord markdown (bold, bullet ' +
         'points) — never headers (#). Be direct; skip preamble.',
       prompt: question,
-      servers: SERVERS.both,
+      servers: await SERVERS.both(),
       maxTokens: 1500,
     });
     await message.reply(text.slice(0, 1900));

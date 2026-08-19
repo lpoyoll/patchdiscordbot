@@ -29,7 +29,7 @@ export function scheduleDigest(client) {
         prompt:
           'Pull pipeline_summary and a quick ad performance check across connected accounts ' +
           '(last 24-48h), then write the digest.',
-        servers: SERVERS.both,
+        servers: await SERVERS.both(),
         maxTokens: 1000,
       });
 

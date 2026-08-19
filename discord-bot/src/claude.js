@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { getMadgicxAccessToken } from './madgicx-auth.js';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
@@ -12,19 +13,22 @@ function patchServer() {
   };
 }
 
-function madgicxServer() {
+async function madgicxServer() {
   return {
     type: 'url',
     url: process.env.MADGICX_MCP_URL,
     name: 'madgicx',
-    authorization_token: process.env.MADGICX_MCP_TOKEN || undefined,
+    // Anthropic's MCP connector only takes a bearer token — Madgicx's
+    // client ID/secret are exchanged for that token in madgicx-auth.js.
+    authorization_token: await getMadgicxAccessToken(),
   };
 }
 
+// Each of these returns a Promise<Array> — call as e.g. `await SERVERS.both()`.
 export const SERVERS = {
-  patch: [patchServer()],
-  madgicx: [madgicxServer()],
-  both: [patchServer(), madgicxServer()],
+  patch: async () => [patchServer()],
+  madgicx: async () => [await madgicxServer()],
+  both: async () => [patchServer(), await madgicxServer()],
 };
 
 /**
@@ -34,7 +38,7 @@ export const SERVERS = {
  * @param {Object} opts
  * @param {string} opts.system - System prompt steering what Claude should do.
  * @param {string} opts.prompt - The user-facing request/question.
- * @param {Array}  opts.servers - MCP server configs, e.g. SERVERS.patch.
+ * @param {Array}  opts.servers - MCP server configs, e.g. await SERVERS.patch().
  * @param {number} [opts.maxTokens]
  */
 export async function askClaude({ system, prompt, servers, maxTokens = 1200 }) {
