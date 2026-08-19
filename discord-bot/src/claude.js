@@ -1,15 +1,16 @@
 import 'dotenv/config';
 import { getMadgicxAccessToken } from './madgicx-auth.js';
+import { getPatchAccessToken } from './patch-auth.js';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
-function patchServer() {
+async function patchServer() {
   return {
     type: 'url',
     url: process.env.PATCH_MCP_URL,
     name: 'patch',
-    authorization_token: process.env.PATCH_MCP_TOKEN || undefined,
+    authorization_token: await getPatchAccessToken(),
   };
 }
 
@@ -26,9 +27,9 @@ async function madgicxServer() {
 
 // Each of these returns a Promise<Array> — call as e.g. `await SERVERS.both()`.
 export const SERVERS = {
-  patch: async () => [patchServer()],
+  patch: async () => [await patchServer()],
   madgicx: async () => [await madgicxServer()],
-  both: async () => [patchServer(), await madgicxServer()],
+  both: async () => [await patchServer(), await madgicxServer()],
 };
 
 /**

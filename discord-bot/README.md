@@ -8,12 +8,13 @@ fill them in for you:
 
 - [ ] `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` — Discord Developer Portal (step 1)
 - [ ] `ANTHROPIC_API_KEY` — Anthropic Console (step 2)
-- [ ] `PATCH_MCP_TOKEN` — Patch's own settings (step 3)
 - [ ] `MADGICX_CLIENT_SECRET` — Madgicx dashboard → Workspace Settings → MCP
   Integration, next to the Client ID (see step 3a)
 - [x] `MADGICX_CLIENT_ID` — already in `.env`
+- [x] `PATCH_BOT_EMAIL` / `PATCH_BOT_PASSWORD` — already in `.env`, but
+  **unverified** — see step 3b before you rely on this in production.
 
-Once those four are filled in, run steps 4-6 below and it's live.
+Once the first three are filled in, run steps 4-6 below and it's live.
 
 
 A Discord bot that answers questions and posts digests by calling Claude with
@@ -80,15 +81,37 @@ client ID/secret blank — the code falls back to using that directly as the
 bearer token, but then *you're* responsible for refreshing it before it
 expires.
 
-### 3b. Patch — long-lived token
+### 3b. Patch — dedicated bot login (unverified — read this)
 
-Patch's MCP server (`claimyourpatch.com/mcp`) is also behind OAuth (confirmed
-— it returns a 401 with an OAuth challenge when hit unauthenticated). Check
-Patch's own admin/integrations settings for a "personal access token" or
-"service account token" you can generate once and drop into `PATCH_MCP_TOKEN`
-in `.env`. If Patch only offers an interactive session token that expires,
-let me know and I'll add refresh handling for it the same way as Madgicx —
-just tell me the token endpoint and grant type Patch uses.
+Patch is a Lovable-built app, so its MCP server is behind OAuth backed by
+whatever auth provider Lovable wired up (commonly Supabase). Rather than a
+manually-issued token, this uses a **dedicated bot account**: create a
+separate Patch login just for the bot (don't reuse your own), and
+`src/patch-auth.js` signs in as that user and refreshes the session
+automatically. Set `PATCH_BOT_EMAIL` / `PATCH_BOT_PASSWORD` in `.env`.
+
+**Important caveat:** I built `patch-auth.js` without network access to
+`claimyourpatch.com` — I couldn't reach the domain to inspect its actual
+login endpoint. So the token-endpoint discovery follows the MCP/OAuth spec
+convention (read the 401 challenge on `/mcp`, follow it to protected-resource
+metadata, then to the authorization server's own metadata for the real
+`token_endpoint`), then does a standard `grant_type=password` exchange.
+This is spec-compliant, but I have **not** confirmed Patch's server actually
+implements resource-owner-password-credentials — some OAuth setups only
+support the interactive browser flow, which a bot can't do at all.
+
+If it doesn't work on first run: `npm start` will throw an error that
+includes the token endpoint it tried and the response body — that tells you
+immediately what's wrong. Two ways to fix it without more code changes:
+
+- If the discovered endpoint is wrong, set `PATCH_TOKEN_ENDPOINT` in `.env`
+  directly to override discovery, once you find the real one (check your
+  browser's Network tab while logging into claimyourpatch.com, and copy the
+  request URL that fires on submit).
+- If Patch flatly doesn't support password grant, you're back to needing a
+  manually-issued long-lived token — check Patch's own admin/integrations
+  settings for one and drop it into `PATCH_MCP_TOKEN` instead (leave
+  `PATCH_BOT_EMAIL`/`PATCH_BOT_PASSWORD` blank so it's used as a fallback).
 
 ## 4. Install & configure
 
