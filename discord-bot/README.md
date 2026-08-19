@@ -2,19 +2,19 @@
 
 ## Status
 
-`.env` in this zip has your Madgicx `MADGICX_CLIENT_ID` pre-filled. Everything
-else is still blank — these can only come from your own accounts, so I can't
-fill them in for you:
+`.env` in this zip has your Madgicx `MADGICX_CLIENT_ID` and Patch bot login
+pre-filled. Everything else is still blank — these can only come from your
+own accounts, so I can't fill them in for you:
 
 - [ ] `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` — Discord Developer Portal (step 1)
 - [ ] `ANTHROPIC_API_KEY` — Anthropic Console (step 2)
 - [ ] `MADGICX_CLIENT_SECRET` — Madgicx dashboard → Workspace Settings → MCP
   Integration, next to the Client ID (see step 3a)
 - [x] `MADGICX_CLIENT_ID` — already in `.env`
-- [x] `PATCH_BOT_EMAIL` / `PATCH_BOT_PASSWORD` — already in `.env`, but
-  **unverified** — see step 3b before you rely on this in production.
+- [x] `PATCH_BOT_EMAIL` / `PATCH_BOT_PASSWORD` — already in `.env`
+- [x] `PATCH_SUPABASE_URL` / `PATCH_SUPABASE_ANON_KEY` — already in `.env`
 
-Once the first three are filled in, run steps 4-6 below and it's live.
+Once the first two are filled in, run steps 4-6 below and it's live.
 
 
 A Discord bot that answers questions and posts digests by calling Claude with
@@ -81,37 +81,33 @@ client ID/secret blank — the code falls back to using that directly as the
 bearer token, but then *you're* responsible for refreshing it before it
 expires.
 
-### 3b. Patch — dedicated bot login (unverified — read this)
+### 3b. Patch — dedicated bot login (Supabase-backed)
 
-Patch is a Lovable-built app, so its MCP server is behind OAuth backed by
-whatever auth provider Lovable wired up (commonly Supabase). Rather than a
-manually-issued token, this uses a **dedicated bot account**: create a
-separate Patch login just for the bot (don't reuse your own), and
-`src/patch-auth.js` signs in as that user and refreshes the session
-automatically. Set `PATCH_BOT_EMAIL` / `PATCH_BOT_PASSWORD` in `.env`.
+Patch is a Lovable-built app running on Supabase (project
+`krvxxdjohlegkddpseyk`). `src/patch-auth.js` signs in with a **dedicated bot
+account** (a separate Patch login created just for the bot — don't reuse
+your own) against Supabase's standard password-grant endpoint, the same one
+Patch's own login page calls, and auto-refreshes the session before it
+expires.
 
-**Important caveat:** I built `patch-auth.js` without network access to
-`claimyourpatch.com` — I couldn't reach the domain to inspect its actual
-login endpoint. So the token-endpoint discovery follows the MCP/OAuth spec
-convention (read the 401 challenge on `/mcp`, follow it to protected-resource
-metadata, then to the authorization server's own metadata for the real
-`token_endpoint`), then does a standard `grant_type=password` exchange.
-This is spec-compliant, but I have **not** confirmed Patch's server actually
-implements resource-owner-password-credentials — some OAuth setups only
-support the interactive browser flow, which a bot can't do at all.
+You need three values in `.env`:
 
-If it doesn't work on first run: `npm start` will throw an error that
-includes the token endpoint it tried and the response body — that tells you
-immediately what's wrong. Two ways to fix it without more code changes:
+- `PATCH_BOT_EMAIL` / `PATCH_BOT_PASSWORD` — the dedicated bot account's
+  login.
+- `PATCH_SUPABASE_ANON_KEY` — Supabase's public "anon"/"publishable" key for
+  this project (safe to be public — it's the same key the Patch web app
+  itself ships in its JS bundle). Find it in your browser's DevTools Network
+  tab while using claimyourpatch.com: look for a request header literally
+  named `apikey` (not `Authorization` — that one's your personal session
+  token, not this key).
+- `PATCH_SUPABASE_URL` — already defaulted to
+  `https://krvxxdjohlegkddpseyk.supabase.co`; only override if that's wrong.
 
-- If the discovered endpoint is wrong, set `PATCH_TOKEN_ENDPOINT` in `.env`
-  directly to override discovery, once you find the real one (check your
-  browser's Network tab while logging into claimyourpatch.com, and copy the
-  request URL that fires on submit).
-- If Patch flatly doesn't support password grant, you're back to needing a
-  manually-issued long-lived token — check Patch's own admin/integrations
-  settings for one and drop it into `PATCH_MCP_TOKEN` instead (leave
-  `PATCH_BOT_EMAIL`/`PATCH_BOT_PASSWORD` blank so it's used as a fallback).
+If sign-in still fails on `npm start`, the error message includes the
+response body from Supabase, which will say why (wrong password, unconfirmed
+email, etc.). If Patch's row-level security is scoped in a way the bot
+account can't see what you need, you may need to grant that account
+additional permissions/role inside Patch itself.
 
 ## 4. Install & configure
 

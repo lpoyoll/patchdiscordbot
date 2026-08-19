@@ -1,6 +1,14 @@
 import 'dotenv/config';
 
-const MCP_URL = process.env.PATCH_MCP_URL || 'https://claimyourpatch.com/mcp';
+// Patch is a Lovable app running on this Supabase project. Its own login
+// page authenticates against Supabase's standard auth API (not the OAuth
+// 2.1 / dynamic-client-registration surface some MCP servers front their
+// resource with) — this does the same thing a human login does: email +
+// password, plus the project's public "apikey" header.
+const SUPABASE_URL = process.env.PATCH_SUPABASE_URL || 'https://krvxxdjohlegkddpseyk.supabase.co';
+const SUPABASE_ANON_KEY = process.env.PATCH_SUPABASE_ANON_KEY;
+
+const TOKEN_URL = `${SUPABASE_URL}/auth/v1/token`;
 
 // Refresh this many seconds before actual expiry.
 const EXPIRY_SAFETY_MARGIN_SECONDS = 60;
@@ -10,21 +18,9 @@ let inFlightAuth = null; // dedupe concurrent sign-ins/refreshes
 
 /**
  * Gets a bearer token for the Patch MCP server, signing in with a dedicated
- * bot account (PATCH_BOT_EMAIL / PATCH_BOT_PASSWORD) and refreshing it
- * automatically before it expires. Falls back to a static PATCH_MCP_TOKEN
- * if no bot credentials are configured.
- *
- * IMPORTANT — this was built without being able to reach claimyourpatch.com
- * from the environment this code was written in (network egress blocked the
- * domain), so the OAuth discovery + password-grant flow below follows the
- * MCP/OAuth spec conventions (RFC 9728 protected-resource metadata, RFC 8414
- * authorization-server metadata, resource-owner-password-credentials grant)
- * but has NOT been verified against the live server. If sign-in fails, the
- * error message will include the token endpoint it tried and the response
- * body — that's the fastest way to see what actually needs to change. You
- * can also skip discovery entirely by setting PATCH_TOKEN_ENDPOINT directly
- * if you find the real login endpoint (e.g. from your browser's Network tab
- * while logging into claimyourpatch.com).
+ * bot account (PATCH_BOT_EMAIL / PATCH_BOT_PASSWORD) via Supabase's standard
+ * password grant, and refreshing it automatically before it expires. Falls
+ * back to a static PATCH_MCP_TOKEN if no bot credentials are configured.
  */
 export async function getPatchAccessToken() {
   const email = process.env.PATCH_BOT_EMAIL;
@@ -36,6 +32,10 @@ export async function getPatchAccessToken() {
       'Patch auth not configured — set PATCH_BOT_EMAIL + PATCH_BOT_PASSWORD ' +
         '(preferred) or PATCH_MCP_TOKEN.',
     );
+  }
+
+  if (!SUPABASE_ANON_KEY) {
+    throw new Error('PATCH_SUPABASE_ANON_KEY is not set — required alongside PATCH_BOT_EMAIL/PASSWORD.');
   }
 
   const now = Date.now();
@@ -54,86 +54,19 @@ export async function getPatchAccessToken() {
   return inFlightAuth;
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Fetching ${url} failed: ${res.status} ${res.statusText}`);
-  return res.json();
-}
-
-/**
- * Discovers the OAuth token endpoint for the Patch MCP server per the MCP
- * authorization spec: an unauthenticated request gets a 401 whose
- * WWW-Authenticate header (or a well-known fallback path) points to
- * protected-resource metadata, which lists the authorization server, whose
- * own metadata document gives the real token_endpoint.
- */
-async function discoverTokenEndpoint() {
-  if (process.env.PATCH_TOKEN_ENDPOINT) return process.env.PATCH_TOKEN_ENDPOINT;
-
-  const mcpOrigin = new URL(MCP_URL).origin;
-
-  const probe = await fetch(MCP_URL, {
+async function signIn(email, password) {
+  const res = await fetch(`${TOKEN_URL}?grant_type=password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
+      apikey: SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 0,
-      method: 'initialize',
-      params: {
-        protocolVersion: '2025-03-26',
-        capabilities: {},
-        clientInfo: { name: 'patch-auth-discovery', version: '0.1' },
-      },
-    }),
-  });
-
-  let resourceMetadataUrl = `${mcpOrigin}/.well-known/oauth-protected-resource`;
-  const authHeader = probe.headers.get('www-authenticate') || '';
-  const match = authHeader.match(/resource_metadata="([^"]+)"/);
-  if (match) resourceMetadataUrl = match[1];
-
-  const resourceMeta = await fetchJson(resourceMetadataUrl);
-  const authServer = resourceMeta.authorization_servers?.[0];
-  if (!authServer) {
-    throw new Error(
-      `Could not find an authorization server in Patch's protected-resource metadata ` +
-        `(${resourceMetadataUrl}). Set PATCH_TOKEN_ENDPOINT directly instead.`,
-    );
-  }
-
-  const authServerMetaUrl = `${authServer.replace(/\/$/, '')}/.well-known/oauth-authorization-server`;
-  const authServerMeta = await fetchJson(authServerMetaUrl);
-  if (!authServerMeta.token_endpoint) {
-    throw new Error(
-      `Patch's authorization server metadata (${authServerMetaUrl}) has no token_endpoint. ` +
-        `Set PATCH_TOKEN_ENDPOINT directly instead.`,
-    );
-  }
-  return authServerMeta.token_endpoint;
-}
-
-async function signIn(email, password) {
-  const tokenEndpoint = await discoverTokenEndpoint();
-  const body = new URLSearchParams({
-    grant_type: 'password',
-    username: email,
-    password,
-  });
-
-  const res = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    body: JSON.stringify({ email, password }),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(
-      `Patch sign-in failed at ${tokenEndpoint} (${res.status}): ${text.slice(0, 400)}`,
-    );
+    throw new Error(`Patch sign-in failed (${res.status}): ${text.slice(0, 400)}`);
   }
 
   const data = await res.json();
@@ -142,21 +75,18 @@ async function signIn(email, password) {
 }
 
 async function refresh(refreshToken) {
-  const tokenEndpoint = await discoverTokenEndpoint();
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-  });
-
-  const res = await fetch(tokenEndpoint, {
+  const res = await fetch(`${TOKEN_URL}?grant_type=refresh_token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Patch token refresh failed at ${tokenEndpoint} (${res.status}): ${text.slice(0, 400)}`);
+    throw new Error(`Patch token refresh failed (${res.status}): ${text.slice(0, 400)}`);
   }
 
   const data = await res.json();
