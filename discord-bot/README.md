@@ -23,6 +23,8 @@ tools, the bot just relays the reply into Discord.
 
 ## What it gives you
 
+- `/help` — lists every command below, generated from the live command
+  definitions, so it can't drift out of sync
 - `/pipeline` — Patch pipeline snapshot (add `detail:true` to include the
   leads sitting at `proposal_sent`)
 - `/revenue` — Patch MRR / run rate / spend, with an optional `months` window
@@ -32,6 +34,12 @@ tools, the bot just relays the reply into Discord.
 - **@mention the bot** anywhere — same as `/ask`, conversational
 - **Scheduled digest** (optional) — posts a pipeline + ad performance summary
   into a channel on a cron schedule (default: weekday mornings)
+
+Discord itself also shows each command's name/description/options as you
+type `/` in a server the bot's joined (that's driven by the same
+`SlashCommandBuilder` definitions `/help` reads from) — but `/help` is there
+for a plain-text rundown people can post or reference without needing to
+half-type a command first.
 
 This is a real always-on process (Discord bots hold a persistent websocket
 connection), so it needs to run somewhere that stays up — not a serverless
